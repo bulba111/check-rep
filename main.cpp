@@ -96,10 +96,10 @@ void output_data_initialize(output_data_type& output_data){
 }
 
 void output_data_update(output_data_type& output_data, const local_data_type& local_data){
-    output_data.M = local_data.m;
-    output_data.M2 = local_data.m*local_data.m;
-    output_data.E = local_data.e;
-    output_data.E2 = local_data.e*local_data.e;
+    output_data.M += local_data.m;
+    output_data.M2 += local_data.m*local_data.m;
+    output_data.E += local_data.e;
+    output_data.E2 += local_data.e*local_data.e;
 }
 
 void output_data_normalize(output_data_type& output_data, const int& stat){
@@ -156,18 +156,25 @@ int main(){
     
     dT = (T_end - T_start)/T_step_amount;
     
-    Gen_rand gen_rand(std::random_device{}());
-    
-    output_data_type** output_data = new output_data_type*[T_step_amount];
-    for (int T_step = 0; T_step<T_step_amount; ++T_step) {
-        output_data[T_step] = new output_data_type[L_step_amount];
-        for (int L_step = 0; L_step<L_step_amount; ++L_step) {
-            output_data_initialize(output_data[T_step][L_step]);
+    output_data_type** output_data = new output_data_type*[L_step_amount];
+    for (int L_step = 0; L_step<L_step_amount; ++L_step) {
+        output_data[L_step] = new output_data_type[T_step_amount];
+        for (int T_step = 0; T_step<T_step_amount; ++T_step) {
+            output_data_initialize(output_data[L_step][T_step]);
         }
     }
     
+    std::cout << "T_step_amount - " << T_step_amount << std::endl;
+    std::cout << "L_step_amount - " << L_step_amount << std::endl;
+    std::cout << "config_amount - " << conf_amount << std::endl;
+    std::cout << "mcs_noinit - " << mcs_thermalization_noinit << std::endl;
+    std::cout << "mcs_init - " << mcs_thermalization_init << std::endl;
+    std::cout << "mcs_Average - " << mcs_average << std::endl;
+    std::cout << "T_initial - " << T_start << std::endl;
+    std::cout << "T_end - " << T_end << std::endl;
     
     
+    Gen_rand gen_rand(std::random_device{}());
     
     for (int L_step = 0; L_step<L_step_amount; ++L_step) {
         const int L = get_linear_size(L_step);
@@ -175,38 +182,39 @@ int main(){
         spin** sp;
         
         allocate_spin_lattice(sp, L);
-        for (int conf = 0; conf < conf_amount; ++conf) {
-            std::cout << "Current conf - " << conf << std::endl;
+        for (int conf_step = 0; conf_step<conf_amount; ++conf_step) {
+            std::cout << "Current conf - " << conf_step << std::endl;
             
             for (int T_step = 0; T_step<T_step_amount; ++T_step) {
-                const int T = (T_start + dT*T_step);
+                const double T = (T_start + dT*T_step);
                 
                 spin_lattice_update(sp, L);
                 
-                const double w[] = {std::exp(-2.0/T), std::exp(-4.0/T),
-                                    std::exp(-6.0/T), std::exp(-8.0/T)};
+                const double w[] = {std::exp(-2.0/T), std::exp(-6.0/T),
+                                    std::exp(-4.0/T), std::exp(-8.0/T)};
                 
-                const int mcs_therm = (T_step == 0 ? mcs_thermalization_init : mcs_thermalization_noinit);
+                const int mcs_therm = ((T_step == 0) ? mcs_thermalization_init : mcs_thermalization_noinit);
                 
+                const int mcs_amount = mcs_therm + mcs_average;
                 
-                const int mcs_amount = mcs_average + mcs_therm;
-                for (int mcs_step = 0; mcs_step < mcs_amount; ++mcs_step) {
-                    const int spin_amount = L*L;
+                for (int mcs_step = 0; mcs_step<mcs_amount; ++mcs_step) {
+                    const int spin_Amount = L*L;
                     
-                    int_distr get_node_i{0, L-1};
-                    real_distr get_random{0.0, 1.0};
+                    int_distr get_node{0, L-1};
+                    real_distr get_num{0.0, 1.0};
                     
-                    auto get_node_index = [&get_node_i, &gen_rand](){
-                        return get_node_i(gen_rand);
+                    auto get_node_index = [&get_node, &gen_rand](){
+                        return get_node(gen_rand);
                     };
                     
-                    auto get_r = [&get_random, &gen_rand](){
-                        return get_random(gen_rand);
+                    auto get_r = [&get_num, &gen_rand](){
+                        return get_num(gen_rand);
                     };
                     
-                    output_data_update(output_data[T_step][L_step], get_local_data(sp, L));
+                    if(mcs_step > mcs_therm)
+                        output_data_update(output_data[L_step][T_step], get_local_data(sp, L));
                     
-                    for (int spin_step = 0; spin_step<spin_amount; ++spin_step) {
+                    for (int spin_step = 0; spin_step<spin_Amount; ++spin_step) {
                         const int i = get_node_index();
                         const int j = get_node_index();
                         
@@ -218,12 +226,11 @@ int main(){
                 }
             }
         }
-        
     }
     
-    for (int T_step = 0; T_step<T_step_amount; ++T_step) {
-        for (int L_step = 0; L_step<L_step_amount; ++L_step) {
-            output_data_normalize(output_data[T_step][L_step], mcs_average*conf_amount);
+    for (int L_step = 0; L_step<L_step_amount; ++L_step) {
+        for (int T_step = 0; T_step<T_step_amount; ++T_step) {
+            output_data_normalize(output_data[L_step][T_step], mcs_average*conf_amount);
         }
     }
     
@@ -239,7 +246,7 @@ int main(){
         fprintf(FILE_OUTPUT, "%10.9lf\t", T);
         
         for (int L_step = 0; L_step<L_step_amount; ++L_step) {
-            const double m = output_data[T_step][L_step].M;
+            const double m = output_data[L_step][T_step].M;
             
             fprintf(FILE_OUTPUT, "\t%10.9lf", m);
         }
@@ -247,7 +254,7 @@ int main(){
         fprintf(FILE_OUTPUT, "\t");
         
         for (int L_step = 0; L_step<L_step_amount; ++L_step) {
-            const double e = output_data[T_step][L_step].E;
+            const double e = output_data[L_step][T_step].E;
             
             fprintf(FILE_OUTPUT, "\t%10.9lf", e);
         }
