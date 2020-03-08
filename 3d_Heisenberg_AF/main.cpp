@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <iostream>
 #include <fstream>
 #include <random>
@@ -203,10 +204,10 @@ void deallocate_spin_lattice(spin***& sp, const int& L){
     delete sp;
 }
 
-int get_linear_size(const int& L_step){
+inline int get_linear_size(const int& L_step){
     
     switch(L_step){
-        case 0: {return 16;} break;
+        case 0: {return 4;} break;
     }
     return 1;
 }
@@ -232,18 +233,27 @@ int main(int argc, char** argv){
     fscanf(INPUT_FILE, "T_initial:  %lf\n", &T_initial);
     fscanf(INPUT_FILE, "T_end:  %lf\n", &T_end);
     fclose(INPUT_FILE);
-    
-    std::cout << "T_step_amount - " << T_step_amount << std::endl;
-    std::cout << "T_step_amount - " << L_step_amount << std::endl;
-    std::cout << "conf_amount - " << conf_amount << std::endl;
-    std::cout << "mcs_average - " << mcs_average << std::endl;
-    std::cout << "mcs_thermalization_noinit - " << mcs_thermalization_noinit << std::endl;
-    std::cout << "mcs_thermalization_init - " << mcs_thermalization_init << std::endl;
-    std::cout << "T_initial - " << T_initial << std::endl;
-    std::cout << "T_end - " << T_end << std::endl;
-    
+        
     
     dT = (T_end - T_initial)/T_step_amount;
+    
+    MPI_Init(&argc, &argv);
+    int rank, size;
+    
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    
+    if(rank == 0){
+        std::cout << "T_step_amount - " << T_step_amount << std::endl;
+        std::cout << "T_step_amount - " << L_step_amount << std::endl;
+        std::cout << "conf_amount - " << conf_amount << std::endl;
+        std::cout << "mcs_average - " << mcs_average << std::endl;
+        std::cout << "mcs_thermalization_noinit - " << mcs_thermalization_noinit << std::endl;
+        std::cout << "mcs_thermalization_init - " << mcs_thermalization_init << std::endl;
+        std::cout << "T_initial - " << T_initial << std::endl;
+        std::cout << "T_end - " << T_end << std::endl;
+    }
+        
     
     Gen_rand gen_rand(std::random_device{}());
     
@@ -339,7 +349,7 @@ int main(int argc, char** argv){
     
     const int file_name_length = 100;
     char file_name[file_name_length];
-    sprintf(file_name, "3d_Heis_equil_L16.dat");
+    sprintf(file_name, "3d_Heis_equil_L16_%d_id.dat", rank);
     FILE* OUTPUT_FILE = fopen(file_name, "w+");
     
     for (int T_step = 0; T_step<T_step_amount; ++T_step) {
@@ -372,6 +382,8 @@ int main(int argc, char** argv){
         delete[] output_data[L_step];
     }
     delete[] output_data;
+    
+    MPI_Finalize();
     
     return 0;
 }
